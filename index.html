@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>極速霓虹賽車</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+        }
+        body {
+            background-color: #0f0c20;
+            color: #fff;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+        #game-container {
+            position: relative;
+            width: 330px;
+            height: 520px;
+            background: linear-gradient(180deg, #181528, #251d3a);
+            border: 4px solid #00f0ff;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 0 25px rgba(0, 240, 255, 0.4);
+        }
+        /* 車道線 */
+        .line {
+            position: absolute;
+            width: 6px;
+            height: 50px;
+            background: rgba(255, 255, 255, 0.7);
+            border-radius: 3px;
+        }
+        .line-1 { left: 108px; }
+        .line-2 { left: 216px; }
+
+        /* 玩家賽車 */
+        #player {
+            position: absolute;
+            bottom: 25px;
+            left: 135px;
+            width: 55px;
+            height: 85px;
+            background: linear-gradient(180deg, #00f0ff, #0072ff);
+            border-radius: 10px;
+            box-shadow: 0 0 15px #00f0ff;
+            transition: left 0.08s ease-out;
+            z-index: 5;
+        }
+        #player::after {
+            content: '';
+            position: absolute;
+            top: 18px;
+            left: 8px;
+            width: 39px;
+            height: 22px;
+            background: #090a10;
+            border-radius: 4px;
+        }
+        /* 護盾特效 */
+        #player.shielded {
+            border: 3px solid #00ff66;
+            box-shadow: 0 0 25px #00ff66;
+        }
+
+        /* 敵方車輛 */
+        .enemy {
+            position: absolute;
+            width: 55px;
+            height: 85px;
+            background: linear-gradient(180deg, #ff0055, #ff5000);
+            border-radius: 10px;
+            box-shadow: 0 0 12px #ff0055;
+            z-index: 4;
+        }
+        .enemy::after {
+            content: '';
+            position: absolute;
+            bottom: 18px;
+            left: 8px;
+            width: 39px;
+            height: 22px;
+            background: #090a10;
+            border-radius: 4px;
+        }
+
+        /* 道具：金幣與護盾 */
+        .item {
+            position: absolute;
+            width: 35px;
+            height: 35px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 18px;
+            z-index: 3;
+        }
+        .coin {
+            background: #ffd700;
+            color: #000;
+            box-shadow: 0 0 12px #ffd700;
+        }
+        .shield {
+            background: #00ff66;
+            color: #000;
+            box-shadow: 0 0 12px #00ff66;
+        }
+
+        /* 儀表板 */
+        #dashboard {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            right: 10px;
+            display: flex;
+            justify-content: space-between;
+            font-size: 15px;
+            font-weight: bold;
+            background: rgba(0, 0, 0, 0.65);
+            padding: 8px 12px;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            z-index: 10;
+        }
+
+        /* 結束畫面 */
+        #game-over-screen {
+            display: none;
+            position: absolute;
+            inset: 0;
+            background: rgba(10, 8, 20, 0.9);
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 20;
+        }
+        #game-over-screen h1 {
+            color: #ff0055;
+            font-size: 34px;
+            margin-bottom: 10px;
+            text-shadow: 0 0 10px #ff0055;
+        }
+        #restart-btn {
+            margin-top: 20px;
+            padding: 12px 30px;
+            font-size: 18px;
+            background: #00f0ff;
+            border: none;
+            border-radius: 25px;
+            font-weight: bold;
+            color: #000;
+            cursor: pointer;
+            box-shadow: 0 0 15px #00f0ff;
+        }
+
+        /* 控制面板 */
+        #controls {
+            margin-top: 15px;
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+        .btn {
+            height: 55px;
+            font-size: 18px;
+            font-weight: bold;
+            background: #1f1b3a;
+            color: #fff;
+            border: 2px solid #00f0ff;
+            border-radius: 12px;
+            touch-action: manipulation;
+        }
+        .btn-move { width: 90px; }
+        .btn-nitro {
+            width: 90px;
+            background: linear-gradient(180deg, #ff0055, #990033);
+            border-color: #ff0055;
+            box-shadow: 0 0 10px #ff0055;
+        }
+        .btn:active { opacity: 0.8; transform: scale(0.96); }
+    </style>
+</head>
+<body>
+
+    <div id="game-container">
+        <div id="dashboard">
+            <div>得分: <span id="score">0</span></div>
+            <div>護盾: <span id="shield-status">無</span></div>
+        </div>
+        <div id="player"></div>
+        <div id="game-over-screen">
+            <h1>GAME OVER</h1>
+            <p>最終分數: <span id="final-score">0</span></p>
+            <button id="restart-btn" onclick="startGame()">重新飆速</button>
+        </div>
+    </div>
+
+    <!-- 手機操作按鈕 -->
+    <div id="controls">
+        <button class="btn btn-move" id="btn-left">◀ 向左</button>
+        <button class="btn btn-nitro" id="btn-nitro">⚡ 氮氣</button>
+        <button class="btn btn-move" id="btn-right">向右 ▶</button>
+    </div>
+
+    <script>
+        const container = document.getElementById('game-container');
+        const player = document.getElementById('player');
+        const scoreDisplay = document.getElementById('score');
+        const shieldStatus = document.getElementById('shield-status');
+        const finalScoreDisplay = document.getElementById('final-score');
+        const gameOverScreen = document.getElementById('game-over-screen');
+
+        const lanes = [25, 137, 248]; // 三個車道
+        let currentLane = 1;
+        let score = 0;
+        let baseSpeed = 5;
+        let speed = baseSpeed;
+        let isShielded = false;
+        let isGameOver = false;
+        let lines = [], enemies = [], items = [];
+        let animationId, enemyTimer = 0, itemTimer = 0;
+
+        // 初始化跑道線
+        function initLines() {
+            for (let i = 0; i < 6; i++) {
+                let l1 = document.createElement('div');
+                l1.className = 'line line-1';
+                l1.style.top = (i * 100) + 'px';
+                container.appendChild(l1);
+                lines.push(l1);
+
+                let l2 = document.createElement('div');
+                l2.className = 'line line-2';
+                l2.style.top = (i * 100) + 'px';
+                container.appendChild(l2);
+                lines.push(l2);
+            }
+        }
+
+        // 動態線條
+        function moveLines() {
+            lines.forEach(l => {
+                let top = parseInt(l.style.top);
+                l.style.top = (top >= 500 ? -50 : top + speed) + 'px';
+            });
+        }
+
+        // 產生敵車
+        function createEnemy() {
+            let enemy = document.createElement('div');
+            enemy.className = 'enemy';
+            let lane = lanes[Math.floor(Math.random() * lanes.length)];
+            enemy.style.left = lane + 'px';
+            enemy.style.top = '-100px';
+            container.appendChild(enemy);
+            enemies.push(enemy);
+        }
+
+        // 產生道具 (金幣 / 護盾)
+        function createItem() {
+            let item = document.createElement('div');
+            let isShield = Math.random() < 0.3; // 30% 機率產生護盾
+            item.className = `item ${isShield ? 'shield' : 'coin'}`;
+            item.innerText = isShield ? '🛡️' : '🪙';
+            item.dataset.type = isShield ? 'shield' : 'coin';
+            
+            let lane = lanes[Math.floor(Math.random() * lanes.length)] + 10;
+            item.style.left = lane + 'px';
+            item.style.top = '-50px';
+            container.appendChild(item);
+            items.push(item);
+        }
+
+        // 移動敵車與判定
+        function updateEnemies() {
+            for (let i = enemies.length - 1; i >= 0; i--) {
+                let e = enemies[i];
+                let top = parseInt(e.style.top);
+                if (top > 520) {
+                    e.remove();
+                    enemies.splice(i, 1);
+                    score += 10;
+                    scoreDisplay.innerText = score;
+                } else {
+                    e.style.top = (top + speed) + 'px';
+                    if (checkCollision(player, e)) {
+                        if (isShielded) {
+                            // 護盾抵擋一次碰撞
+                            isShielded = false;
+                            player.classList.remove('shielded');
+                            shieldStatus.innerText = '無';
+                            e.remove();
+                            enemies.splice(i, 1);
+                        } else {
+                            endGame();
+                        }
+                    }
+                }
+            }
+        }
+
+        // 移動道具與吃道具判定
+        function updateItems() {
+            for (let i = items.length - 1; i >= 0; i--) {
+                let item = items[i];
+                let top = parseInt(item.style.top);
+                if (top > 520) {
+                    item.remove();
+                    items.splice(i, 1);
+                } else {
+                    item.style.top = (top + speed) + 'px';
+                    if (checkCollision(player, item)) {
+                        if (item.dataset.type === 'coin') {
+                            score += 50;
+                        } else {
+                            isShielded = true;
+                            player.classList.add('shielded');
+                            shieldStatus.innerText = '開啟';
+                        }
+                        scoreDisplay.innerText = score;
+                        item.remove();
+                        items.splice(i, 1);
+                    }
+                }
+            }
+        }
+
+        function checkCollision(a, b) {
+            let r1 = a.getBoundingClientRect();
+            let r2 = b.getBoundingClientRect();
+            return !(r1.bottom < r2.top || r1.top > r2.bottom || r1.right < r2.left || r1.left > r2.right);
+        }
+
+        // 控制玩家移動
+        function move(dir) {
+            if (isGameOver) return;
+            if (dir === -1 && currentLane > 0) currentLane--;
+            if (dir === 1 && currentLane < 2) currentLane++;
+            player.style.left = lanes[currentLane] + 'px';
+        }
+
+        // 氮氣加速
+        function triggerNitro() {
+            if (isGameOver) return;
+            speed = baseSpeed + 6;
+            setTimeout(() => { speed = baseSpeed; }, 1500);
+        }
+
+        // 鍵盤操作
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowLeft' || e.key === 'a') move(-1);
+            if (e.key === 'ArrowRight' || e.key === 'd') move(1);
+            if (e.key === ' ') triggerNitro();
+        });
+
+        // 按鈕綁定
+        document.getElementById('btn-left').onclick = () => move(-1);
+        document.getElementById('btn-right').onclick = () => move(1);
+        document.getElementById('btn-nitro').onclick = triggerNitro;
+
+        // 遊戲核心迴圈
+        function gameLoop() {
+            if (isGameOver) return;
+
+            moveLines();
+            updateEnemies();
+            updateItems();
+
+            enemyTimer++;
+            if (enemyTimer > Math.max(25, 70 - Math.floor(score / 100) * 5)) {
+                createEnemy();
+                enemyTimer = 0;
+            }
+
+            itemTimer++;
+            if (itemTimer > 120) {
+                createItem();
+                itemTimer = 0;
+            }
+
+            animationId = requestAnimationFrame(gameLoop);
+        }
+
+        function startGame() {
+            enemies.forEach(e => e.remove());
+            items.forEach(i => i.remove());
+            enemies = []; items = [];
+
+            isGameOver = false;
+            score = 0;
+            currentLane = 1;
+            isShielded = false;
+            player.classList.remove('shielded');
+            shieldStatus.innerText = '無';
+            player.style.left = lanes[currentLane] + 'px';
+            scoreDisplay.innerText = score;
+            gameOverScreen.style.display = 'none';
+
+            if (lines.length === 0) initLines();
+            gameLoop();
+        }
+
+        function endGame() {
+            isGameOver = true;
+            finalScoreDisplay.innerText = score;
+            gameOverScreen.style.display = 'flex';
+            cancelAnimationFrame(animationId);
+        }
+
+        startGame();
+    </script>
+</body>
+</html>
